@@ -7,6 +7,9 @@
 *.app/Contents/MacOS/*
 *.app/Contents/Resources/*.icns
 
+# Distributables produced locally
+dist/
+
 # Local editor / OS
 .idea/
 .vscode/
