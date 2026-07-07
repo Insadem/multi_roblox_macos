@@ -6,6 +6,8 @@ import (
 )
 
 func TestCopy(t *testing.T) {
+	requireRoblox(t)
+
 	copy, err := NewCopy()
 	if err != nil {
 		t.Error(err)

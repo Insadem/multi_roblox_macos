@@ -3,6 +3,8 @@ package urlhandler
 import "testing"
 
 func TestUrlHandler(t *testing.T) {
+	requireRoblox(t)
+
 	ROBLOX_BUNDLE_IDENTIFIER := "com.roblox.RobloxPlayer"
 	v := Check(ROBLOX_BUNDLE_IDENTIFIER, "roblox")
 	if v != true {

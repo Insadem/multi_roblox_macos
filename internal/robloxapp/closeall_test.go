@@ -6,6 +6,8 @@ import (
 )
 
 func TestCloseAll(t *testing.T) {
+	requireRoblox(t)
+
 	close, err := Open()
 	if err != nil {
 		t.Error(err)

@@ -8,6 +8,8 @@ import (
 )
 
 func TestBreak(t *testing.T) {
+	requireRoblox(t)
+
 	close, err := robloxapp.Open()
 	if err != nil {
 		t.Error(err)
