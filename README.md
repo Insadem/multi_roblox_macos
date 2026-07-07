@@ -1,37 +1,47 @@
 # multi-roblox-macos
 
-Run multiple [Roblox](https://www.roblox.com) players at the same time on macOS — one per browser account, with teleport between places still working.
+Run multiple [Roblox](https://www.roblox.com) players at the same time on macOS, one per browser account, with teleport between places still working.
+
+## Demo
+
+Two Roblox clients running simultaneously on macOS:
+
+![Two Roblox instances](docs/images/two-instances.png)
 
 ## Overview
 
-`multi-roblox-macos` is a small native macOS launcher that lets you play several Roblox games in parallel from the same Mac, each signed in to a different Roblox account. It is useful when you want to test your own game with multiple accounts, play with friends using alts, or run a private server alongside your main account.
+`multi-roblox-macos` is a small native macOS launcher. It registers itself as the OS handler for the `roblox-player://` URL scheme, so every "Play" click on roblox.com is delivered to this app. For each deeplink, it clones `/Applications/Roblox.app` into a unique temp directory, patches the copy so Launch Services does not refuse it, and opens the copy. Closing the launcher removes the clones.
 
-Roblox's own `RobloxPlayer.app` declares `LSMultipleInstancesProhibited = true`, which makes Launch Services refuse to start a second copy. This app works around that by:
+Roblox's own `RobloxPlayer.app` declares `LSMultipleInstancesProhibited = true`, which makes Launch Services refuse to start a second copy. The work-around is to clone the bundle, edit the clone's `Info.plist`, and destroy Roblox's named semaphore so the new copy believes no other player is running.
 
-1. Registering itself as the OS handler for the `roblox-player://` URL scheme.
-2. On every deeplink handed to it by the browser, cloning `/Applications/Roblox.app` to a fresh temp directory, flipping `LSMultipleInstancesProhibited` off in the copy's `Info.plist`, and opening it.
-3. Cleaning up the temp copy on quit.
+The codebase is Go, with a small Objective-C bridge for the Cocoa UI and the `kAEGetURL` Apple Event handler. There is no Xcode project, no CocoaPods, and no Swift.
 
-The bundled binary is a small, self-contained Go program that links directly against AppKit. There is no Xcode project, no CocoaPods, and no Swift. The whole toolchain is `go build` plus `build.sh`.
+## Credits
+
+This project is based on the original work by Insadem.
+
+Original repository:
+<https://github.com/Insadem/multi-roblox-macos>
+
+This fork focuses on restoring compatibility with modern macOS versions, fixing a startup crash introduced by an outdated Cocoa wrapper, improving error handling and shutdown safety, and adding professional documentation, CI, and release tooling. The original MIT license and attribution are preserved.
 
 ## Features
 
-- **Multiple Roblox instances** — play any number of Roblox games in parallel, one per browser account.
-- **Apple Silicon support** — builds and runs natively on arm64.
-- **Intel support** — builds and runs on x86_64.
-- **Universal binary** — `build.sh universal` produces a single fat binary with both architectures.
-- **Native macOS app** — small Cocoa window with two buttons (Discord link, "close all instances"). No browser, no Electron, no system tray.
-- **Automatic Roblox cloning** — every deeplink spawns a fresh clone; an auto-updated Roblox is picked up on the next click.
-- **Modern macOS compatibility** — runs on macOS 11 Big Sur through macOS 26 Tahoe.
-- **Teleport support** — teleport between places is preserved, because teleport deeplinks are routed through the same `roblox-player://` handler.
+- **Multiple Roblox instances.** Each deeplink spawns a fresh copy, isolated from the others.
+- **Apple Silicon support.** Builds and runs natively on arm64.
+- **Intel support.** Builds and runs on x86_64.
+- **Universal binary.** `./build.sh universal` produces a single fat binary.
+- **Native macOS app.** Small Cocoa window with two buttons. No browser, no Electron.
+- **Automatic Roblox cloning.** Every deeplink spawns a fresh clone. An auto-updated Roblox is picked up on the next click.
+- **Teleport support.** Teleport deeplinks are routed through the same `roblox-player://` handler.
 
 ## Installation
 
 ### Requirements
 
-- macOS 11 (Big Sur) or newer, on Apple Silicon or Intel
-- [Go 1.23+](https://go.dev/dl/) (only required to build from source)
-- Xcode Command Line Tools (`xcode-select --install`)
+- A Mac running a recent version of macOS (see [Compatibility](#compatibility))
+- [Go 1.23+](https://go.dev/dl/) — only required when building from source
+- Xcode Command Line Tools (`xcode-select --install`) — required for cgo against AppKit
 
 ### Clone
 
@@ -43,10 +53,10 @@ cd multi-roblox-macos
 ### Build
 
 ```sh
-# Build for the architecture you are running on
+# Native build for the architecture you are running on
 ./build.sh
 
-# Or build a universal (arm64 + amd64) bundle
+# Or a universal (arm64 + amd64) bundle
 ./build.sh universal
 ```
 
@@ -58,19 +68,19 @@ The script writes the binary into `multiroblox.app/Contents/MacOS/multi-roblox-m
 open multiroblox.app
 ```
 
-A small window titled "multi-roblox-macos" appears. Leave it running in the background.
+A small window titled "multi-roblox-macos" appears. Leave it running.
 
-To start a Roblox game, go to [roblox.com](https://www.roblox.com) in your browser, sign in to the account you want to play on, and click any "Play" button. The browser hands the deeplink to this app, which spawns a new instance.
+To start a Roblox game, go to [roblox.com](https://www.roblox.com) in your browser, sign in to the account you want to play, and click any "Play" button. The browser hands the deeplink to this app, which spawns a new instance.
 
-To start a *second* instance, switch to a different browser account (or use a different browser profile) and click Play again. Repeat as many times as you like.
+To start a second instance, switch to a different browser account (or use a different browser profile) and click Play again. Repeat as needed.
 
-To stop everything, click the **close all instances** button in the window.
+To stop every running Roblox process, click **close all instances** in the multi-roblox-macos window.
 
 ### Uninstall
 
 1. Quit the multi-roblox-macos window.
 2. Drag `multiroblox.app` to the Trash.
-3. (Optional) Remove any leftover temp directories:
+3. (Optional) Remove leftover temp directories:
 
    ```sh
    rm -rf "$TMPDIR"/multi-roblox-*
@@ -90,15 +100,15 @@ open multiroblox.app # run the app
 Then:
 
 1. Click **Play** on roblox.com under account A. The first Roblox instance starts.
-2. Switch to account B in the same browser (or another browser profile).
+2. Switch to account B in the same browser, or use a different browser profile.
 3. Click **Play** again. A second, independent instance starts.
-4. Use teleport as normal — it still works because both instances are listening for `roblox-player://` deeplinks.
+4. Use teleport as normal; it still works.
 
-To terminate all running Roblox processes, click **close all instances** in the multi-roblox-macos window.
+To terminate every running Roblox process, click **close all instances** in the multi-roblox-macos window.
 
 ## How it works
 
-When you click "Play" on roblox.com, the browser asks the OS to open a `roblox-player://...` URL. By default, macOS routes that URL to RobloxPlayer.app, which refuses to start a second copy.
+When you click "Play" on roblox.com, the browser asks the OS to open a `roblox-player://...` URL. By default, macOS routes that URL to `RobloxPlayer.app`, which refuses to start a second copy.
 
 This app registers itself as the default handler for the `roblox-player://` scheme. macOS now hands every deeplink to multi-roblox-macos instead.
 
@@ -108,19 +118,20 @@ For each deeplink:
 2. `/Applications/Roblox.app` is recursively copied (`cp -a`) into that directory.
 3. The named semaphore `/RobloxPlayerUniq` — which Roblox uses to detect an already-running player — is destroyed via `sem_unlink`.
 4. The copy is opened with `open -a`.
-5. After launch, the copy's `Info.plist` is patched to set `LSMultipleInstancesProhibited = false`, so that the next deeplink is not blocked.
+5. After launch, the copy's `Info.plist` is patched to set `LSMultipleInstancesProhibited = false`, so the next deeplink is not blocked.
 6. On quit, every copy is removed (`os.RemoveAll`).
 
 The `kAEGetURL` Apple Event that delivers the deeplink is installed via a small Objective-C bridge in `internal/deeplink/`. The Cocoa UI window is installed via a small Objective-C bridge in `internal/macosapp/`.
 
 ## Compatibility
 
-| Component | Versions tested |
+| Component | Versions tested by the maintainer |
 |---|---|
-| macOS | 11 Big Sur, 12 Monterey, 13 Ventura, 14 Sonoma, 15 Sequoia, 26 Tahoe |
-| Architecture | Apple Silicon (arm64), Intel (x86_64), Universal |
-| Go | 1.23, 1.24, 1.25, 1.26 |
-| Roblox | Any version that ships a `RobloxPlayer.app` under `/Applications` |
+| macOS | 26 Tahoe (Apple Silicon) |
+| Architecture | arm64 |
+| Go | 1.23, 1.26 |
+
+The app links against AppKit and Launch Services, both of which are available on macOS 10.13 High Sierra and newer, and against `NSWorkspace.URLForApplicationToOpenURL:`, which is available on macOS 10.6 and newer. Compatibility with other recent macOS versions and with Intel hardware is expected, but has not been verified by the maintainer. Community testing is welcome — please open an issue with your hardware, macOS version, and result.
 
 ## Troubleshooting
 
@@ -131,7 +142,7 @@ The `kAEGetURL` Apple Event that delivers the deeplink is installed via a small 
   ```sh
   ./multiroblox.app/Contents/MacOS/multi-roblox-macos
   ```
-- Make sure no older copy of the app is still running. Use `Activity Monitor` and search for `multi-roblox-macos`.
+- Make sure no older copy of the app is still running. Use Activity Monitor and search for `multi-roblox-macos`.
 
 ### Roblox doesn't launch
 
@@ -143,7 +154,7 @@ The `kAEGetURL` Apple Event that delivers the deeplink is installed via a small 
 - Some browser extensions intercept `roblox-player://` URLs and route them to the original Roblox app. Disable extensions on roblox.com, or try a different browser.
 - If a previous Roblox process is hung, click **close all instances** to terminate it, then try again.
 
-### Permissions issues
+### Permissions
 
 - This app does not require Full Disk Access, Accessibility, or any other macOS privacy permission. It only writes to `$TMPDIR` and to copies of `Roblox.app` it owns.
 
@@ -174,6 +185,8 @@ The `kAEGetURL` Apple Event that delivers the deeplink is installed via a small 
 ├── main.go                          # entry point, deeplink dispatch loop
 ├── build.sh                         # native and universal build script
 ├── go.mod / go.sum                  # Go module manifest
+├── docs/
+│   └── images/                      # screenshots used in the README
 ├── multiroblox.app/                 # the .app bundle
 │   └── Contents/
 │       ├── Info.plist               # registers the roblox-player:// scheme
@@ -186,9 +199,14 @@ The `kAEGetURL` Apple Event that delivers the deeplink is installed via a small 
 │   ├── robloxapp/                   # Roblox.app cloning, close-all, open
 │   ├── syncbreaker/                 # sem_unlink("/RobloxPlayerUniq")
 │   └── urlhandler/                  # Launch Services / NSWorkspace wrapper
-└── pkg/
-    ├── fspath/                      # Path + TMPDir helpers
-    └── ps/                          # cross-platform process table reader
+├── pkg/
+│   ├── fspath/                      # Path + TMPDir helpers
+│   └── ps/                          # cross-platform process table reader
+├── scripts/
+│   └── build-dmg.sh                 # DMG creation
+└── .github/
+    ├── workflows/                   # CI and release
+    └── RELEASE_NOTES/               # per-version release notes
 ```
 
 ### Building
@@ -206,14 +224,12 @@ Unit tests live next to the code they cover (`*_test.go`). Integration tests und
 
 ### Building a DMG
 
-The release workflow at `.github/workflows/release.yml` produces a signed DMG via `create-dmg`. To build a DMG locally:
-
 ```sh
 brew install create-dmg
 ./scripts/build-dmg.sh
 ```
 
-The output is `dist/multi-roblox-macos-<version>.dmg`.
+The output is `dist/multi-roblox-macos-<version>.dmg`. See [`.github/workflows/release.yml`](.github/workflows/release.yml) for the full signed-and-notarized release flow.
 
 ### Contributing
 

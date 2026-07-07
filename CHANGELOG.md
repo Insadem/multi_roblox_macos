@@ -25,10 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Universal binary support (arm64 + amd64) via `lipo`.
 
 ### Fixed
-- **Startup crash on macOS 15+ (Darwin 25.x).** `darwinkit v0.5.1` calls
-  `[NSApplication run]` in a way that throws a C++ exception on modern
-  Cocoa runtimes, aborting the process before any UI appears. Replaced
-  with a minimal Objective-C bridge.
+- **Startup crash on Darwin 25.x (macOS 26 Tahoe).** `darwinkit v0.5.1`
+  calls `[NSApplication run]` in a way that throws a C++ exception on
+  modern Cocoa runtimes, aborting the process before any UI appears.
+  Replaced with a minimal Objective-C bridge. Confirmed by the
+  maintainer on a real Apple Silicon Mac.
 - `internal/infoplist/infoplist.go` — `os.WriteFile` and `plist.Decode`
   errors were being silently dropped, leading to half-written Info.plist
   files. Both errors are now wrapped and returned.
