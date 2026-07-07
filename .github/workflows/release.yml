@@ -1,0 +1,98 @@
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 2.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: build & sign
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Build universal binary
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -o multiroblox.app/Contents/MacOS/multi-roblox-macos.arm64 .
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -o multiroblox.app/Contents/MacOS/multi-roblox-macos.amd64 .
+          lipo -create -output multiroblox.app/Contents/MacOS/multi-roblox-macos \
+            multiroblox.app/Contents/MacOS/multi-roblox-macos.arm64 \
+            multiroblox.app/Contents/MacOS/multi-roblox-macos.amd64
+          rm multiroblox.app/Contents/MacOS/multi-roblox-macos.arm64 \
+             multiroblox.app/Contents/MacOS/multi-roblox-macos.amd64
+          chmod +x multiroblox.app/Contents/MacOS/multi-roblox-macos
+
+      - name: Codesign
+        if: env.SIGN_IDENTITY != ''
+        env:
+          SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
+        run: |
+          echo "Codesigning with ${SIGN_IDENTITY}..."
+          codesign --force --deep --options runtime --timestamp \
+            --sign "${SIGN_IDENTITY}" multiroblox.app
+          codesign --verify --verbose=2 multiroblox.app
+
+      - name: Notarize
+        if: env.APPLE_ID != ''
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          # Create a zip for notarization (notarytool prefers zip).
+          ditto -c -k --sequesterRsrc --keepParent multiroblox.app multiroblox.app.zip
+          xcrun notarytool submit multiroblox.app.zip \
+            --apple-id "${APPLE_ID}" \
+            --team-id "${APPLE_TEAM_ID}" \
+            --password "${APPLE_APP_PASSWORD}" \
+            --wait
+          xcrun stapler staple multiroblox.app
+          rm multiroblox.app.zip
+
+      - name: Build DMG
+        env:
+          SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
+        run: ./scripts/build-dmg.sh
+
+      - name: Build .app.zip
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent multiroblox.app multiroblox-macos-${{ env.VERSION }}.app.zip
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "v${{ env.VERSION }}"
+          draft: true
+          generate_release_notes: true
+          files: |
+            dist/multi-roblox-macos-${{ env.VERSION }}.dmg
+            multiroblox-macos-${{ env.VERSION }}.app.zip
