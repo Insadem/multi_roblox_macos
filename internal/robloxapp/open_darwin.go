@@ -4,8 +4,8 @@
 package robloxapp
 
 import (
-	"os"
 	"os/exec"
+	"syscall"
 )
 
 // Open launches /Applications/Roblox.app's main executable directly,
@@ -26,7 +26,7 @@ func Open() (func(), error) {
 			return
 		}
 		// Try SIGTERM first to give Roblox a chance to clean up.
-		if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
 			// Fall back to SIGKILL.
 			_ = cmd.Process.Kill()
 		}
