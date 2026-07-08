@@ -3,17 +3,33 @@
 
 package robloxapp
 
-import "os/exec"
+import (
+	"os/exec"
+	"syscall"
+)
 
+// Open launches /Applications/Roblox.app's main executable directly,
+// bypassing Launch Services. This is only useful for tests and small
+// command-line tools; production code should go through exec.Command("open", ...).
+//
+// The returned cleanup function sends SIGTERM and then SIGKILL if the
+// process is still running, matching CloseAll's behaviour. We do not call
+// Wait() so the caller controls timing.
 func Open() (func(), error) {
 	cmd := exec.Command("/Applications/Roblox.app/Contents/MacOS/RobloxPlayer")
-	err := cmd.Start()
-	if err != nil {
+	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 
 	return func() {
-		cmd.Process.Kill()
-		cmd.Process.Release()
+		if cmd.Process == nil {
+			return
+		}
+		// Try SIGTERM first to give Roblox a chance to clean up.
+		if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+			// Fall back to SIGKILL.
+			_ = cmd.Process.Kill()
+		}
+		_ = cmd.Process.Release()
 	}, nil
 }

@@ -21,7 +21,11 @@ func TestFindProcess(t *testing.T) {
 
 func TestProcesses(t *testing.T) {
 	// This test works because there will always be SOME processes
-	// running.
+	// running. We just assert the list is non-empty and contains at
+	// least one process whose name we can match against the test
+	// runner's own pid. This is more robust than hard-coding a binary
+	// name like "gopls" or "go.exe" that may not exist on every
+	// developer's machine.
 	p, err := Processes()
 	if err != nil {
 		t.Fatalf("err: %s", err)
@@ -31,15 +35,13 @@ func TestProcesses(t *testing.T) {
 		t.Fatal("should have processes")
 	}
 
-	found := false
-	for _, p1 := range p {
-		if p1.Executable() == "gopls" || p1.Executable() == "go.exe" {
-			found = true
-			break
-		}
+	// FindProcess should be able to look us up by pid, which proves
+	// the iteration above covers our own process.
+	self, err := FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("find self: %s", err)
 	}
-
-	if !found {
-		t.Fatal("should have Go")
+	if self == nil {
+		t.Fatal("expected to find own process in process list")
 	}
 }

@@ -29,5 +29,11 @@ func Handler() <-chan string {
 //export HandleCustomProtocol
 func HandleCustomProtocol(url *C.char) {
 	goUrl := C.GoString(url)
-	openURLChan <- goUrl
+	// Non-blocking send. If the Go side has not started consuming yet,
+	// the URL is dropped on the floor rather than blocking the C caller
+	// and freezing the Apple Event manager.
+	select {
+	case openURLChan <- goUrl:
+	default:
+	}
 }

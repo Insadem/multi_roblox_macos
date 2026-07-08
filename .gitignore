@@ -1,2 +1,18 @@
+# macOS
 .DS_Store
-*.app
+
+# Build artifacts
+# Ignore compiled binaries written into the .app bundle by build.sh.
+# The Info.plist inside the .app is still tracked.
+*.app/Contents/MacOS/*
+*.app/Contents/Resources/*.icns
+
+# Distributables produced locally
+dist/
+
+# Local editor / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

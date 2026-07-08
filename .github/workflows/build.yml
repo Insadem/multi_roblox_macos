@@ -1,0 +1,87 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  vet:
+    name: vet & test
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+      - name: gofmt
+        run: |
+          if [ "$(gofmt -l . | wc -l)" -ne 0 ]; then
+            echo "gofmt errors:"
+            gofmt -l .
+            exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./pkg/... ./internal/infoplist/
+
+  build:
+    name: build (${{ matrix.target }})
+    needs: vet
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: arm64
+            goarch: arm64
+            artifact: multi-roblox-macos-arm64
+          - target: amd64
+            goarch: amd64
+            artifact: multi-roblox-macos-amd64
+          - target: universal
+            goarch: arm64
+            artifact: multi-roblox-macos-universal
+            extra: amd64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+      - name: Build ${{ matrix.target }}
+        env:
+          GOOS: darwin
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "1"
+        run: |
+          OUT="multiroblox-macos-${{ matrix.target }}"
+          if [[ "${{ matrix.target }}" == "universal" ]]; then
+            GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -o "${OUT}-arm64" .
+            GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -o "${OUT}-amd64" .
+            lipo -create -output "${OUT}" "${OUT}-arm64" "${OUT}-amd64"
+            rm -f "${OUT}-arm64" "${OUT}-amd64"
+          else
+            go build -o "${OUT}" .
+          fi
+      - name: Package .app
+        run: |
+          mkdir -p ${{ matrix.artifact }}
+          cp multiroblox.app/Contents/Info.plist ${{ matrix.artifact }}/
+          mkdir -p ${{ matrix.artifact }}/Contents/MacOS
+          mkdir -p ${{ matrix.artifact }}/Contents/Resources
+          cp multiroblox.app/Contents/Resources/AppIcon.icns ${{ matrix.artifact }}/Contents/Resources/ || true
+          cp multi-roblox-macos-${{ matrix.target }} ${{ matrix.artifact }}/Contents/MacOS/multi-roblox-macos
+          chmod +x ${{ matrix.artifact }}/Contents/MacOS/multi-roblox-macos
+      - name: Zip
+        run: |
+          zip -r ${{ matrix.artifact }}.zip ${{ matrix.artifact }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.zip
